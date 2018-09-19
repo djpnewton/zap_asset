@@ -19,6 +19,44 @@ DEFAULT_SCRIPT_FEE = 1000000
 def waves_timestamp():
     return int(time.time() * 1000)
 
+def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachment='', feeAsset='', fee=pywaves.DEFAULT_TX_FEE, timestamp=0):
+    if amount <= 0:
+        msg = 'Amount must be > 0'
+        logging.error(msg)
+        pywaves.throw_error(msg)
+    else:
+        if timestamp == 0:
+            timestamp = waves_timestamp()
+        sData = b'\4' + \
+            b'\2' + \
+            base58.b58decode(pubkey) + \
+            (b'\1' + base58.b58decode(assetid) if assetid else b'\0') + \
+            (b'\1' + base58.b58decode(feeAsset) if feeAsset else b'\0') + \
+            struct.pack(">Q", timestamp) + \
+            struct.pack(">Q", amount) + \
+            struct.pack(">Q", fee) + \
+            base58.b58decode(recipient) + \
+            struct.pack(">H", len(attachment)) + \
+            crypto.str2bytes(attachment)
+        signature = crypto.sign(address.privateKey, sData)
+        data = json.dumps({
+            "type": 4,
+            "version": 2,
+            "senderPublicKey": pubkey,
+            "recipient": recipient,
+            "assetId": (assetid if assetid else ""),
+            "feeAssetId": (feeAsset if feeAsset else ""),
+            "amount": amount,
+            "fee": fee,
+            "timestamp": timestamp,
+            "attachment": base58.b58encode(crypto.str2bytes(attachment)),
+            "proofs": [
+                signature
+            ]
+        }, indent=4)
+
+        return data
+
 def issue_asset_payload(address, pubkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=pywaves.DEFAULT_ASSET_FEE, timestamp=0):
     if not address.privateKey:
         msg = 'Private key required'
@@ -182,6 +220,17 @@ def get_seed_addr_pubkey(args):
 
     return seed, address, pubkey
 
+def transfer_run(args, timestamp=0):
+    seed, address, pubkey = get_seed_addr_pubkey(args)
+
+    fee = pywaves.DEFAULT_TX_FEE
+    if args.fee:
+        fee = args.fee
+
+    data = transfer_asset_payload(address, pubkey, args.recipient, args.assetid, args.amount, fee=fee, timestamp=timestamp)
+
+    return data
+
 def issue_run(args, timestamp=0):
     seed, address, pubkey = get_seed_addr_pubkey(args)
 
@@ -256,6 +305,12 @@ if __name__ == "__main__":
     parser.add_argument("-f", "--fee", type=int, default=0, help="The fee to use (if you want to override the default)")
     subparsers = parser.add_subparsers(dest="command")
 
+    parser_transfer = subparsers.add_parser("transfer", help="Transfer an asset")
+    parser_transfer.add_argument("account", metavar="ACCOUNT", type=str, help="The account to transfer from the token from")
+    parser_transfer.add_argument("recipient", metavar="RECIPIENT", type=str, help="The recipient of the asset")
+    parser_transfer.add_argument("assetid", metavar="ASSETID", type=str, help="The asset id")
+    parser_transfer.add_argument("amount", metavar="AMOUNT", type=int, help="The amount of tokens to transfer")
+
     parser_issue = subparsers.add_parser("issue", help="Create a zap token with a waves account")
     parser_issue.add_argument("account", metavar="ACCOUNT", type=str, help="The account to create the token with")
     parser_issue.add_argument("amount", metavar="AMOUNT", type=int, help="The amount of tokens to create")
@@ -290,7 +345,9 @@ if __name__ == "__main__":
 
     # set appropriate function
     command = None
-    if args.command == "issue":
+    if args.command == "transfer":
+        command = transfer_run
+    elif args.command == "issue":
         command = issue_run
     elif args.command == "reissue":
         command = reissue_run
