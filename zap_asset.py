@@ -19,7 +19,7 @@ DEFAULT_SCRIPT_FEE = 1000000
 def waves_timestamp():
     return int(time.time() * 1000)
 
-def issue_asset_payload(address, pubkey, name, description, quantity, decimals=2, reissuable=True, fee=pywaves.DEFAULT_ASSET_FEE, timestamp=0):
+def issue_asset_payload(address, pubkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=pywaves.DEFAULT_ASSET_FEE, timestamp=0):
     if not address.privateKey:
         msg = 'Private key required'
         logging.error(msg)
@@ -29,6 +29,10 @@ def issue_asset_payload(address, pubkey, name, description, quantity, decimals=2
         logging.error(msg)
         pywaves.throw_error(msg)
     else:
+        # it looks like script can always be 'None' (might be a bug)
+        if script:
+            rawScript = base64.b64decode(script)
+            scriptLength = len(rawScript)
         if timestamp == 0:
             timestamp = waves_timestamp()
         sData = b'\3' + \
@@ -43,10 +47,8 @@ def issue_asset_payload(address, pubkey, name, description, quantity, decimals=2
             struct.pack(">B", decimals) + \
             (b'\1' if reissuable else b'\0') + \
             struct.pack(">Q", fee) + \
-            struct.pack(">Q", timestamp)
-            #b'\1' + \
-            #struct.pack(">H", scriptLength) + \
-            #crypto.str2bytes(str(rawScript)) + \
+            struct.pack(">Q", timestamp) + \
+            (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0')
 
         signature=crypto.sign(address.privateKey, sData)
         data = json.dumps({
@@ -71,12 +73,14 @@ def reissue_asset_payload(address, pubkey, assetid, quantity, reissuable=False, 
     if timestamp == 0:
         timestamp = waves_timestamp()
     sData = b'\5' + \
-            base58.b58decode(pubkey) + \
-            base58.b58decode(assetid) + \
-            struct.pack(">Q", quantity) + \
-            (b'\1' if reissuable else b'\0') + \
-            struct.pack(">Q",fee) + \
-            struct.pack(">Q", timestamp)
+        b'\2' + \
+        crypto.str2bytes(str(pywaves.CHAIN_ID)) + \
+        base58.b58decode(pubkey) + \
+        base58.b58decode(assetid) + \
+        struct.pack(">Q", quantity) + \
+        (b'\1' if reissuable else b'\0') + \
+        struct.pack(">Q",fee) + \
+        struct.pack(">Q", timestamp)
     signature = crypto.sign(address.privateKey, sData)
     data = json.dumps({
         "type": 5,
@@ -185,7 +189,7 @@ def issue_run(args, timestamp=0):
     if args.fee:
         fee = args.fee
 
-    data = issue_asset_payload(address, pubkey, "ZAP!", "", args.amount, decimals=2, reissuable=True, timestamp=timestamp)
+    data = issue_asset_payload(address, pubkey, "ZAP!", "", args.amount, decimals=2, reissuable=True, fee=fee, timestamp=timestamp)
 
     return data
 
@@ -196,7 +200,7 @@ def reissue_run(args, timestamp=0):
     if args.fee:
         fee = args.fee
 
-    data = reissue_asset_payload(address, pubkey, args.assetid, args.amount, reissuable=True, timestamp=timestamp)
+    data = reissue_asset_payload(address, pubkey, args.assetid, args.amount, reissuable=True, fee=fee, timestamp=timestamp)
     return data
 
 def sponsor_run(args, timestamp=0):
@@ -206,7 +210,7 @@ def sponsor_run(args, timestamp=0):
     if args.fee:
         fee = args.fee
     
-    data = sponsor_payload(address, pubkey, args.assetid, args.assetfee, timestamp=timestamp)
+    data = sponsor_payload(address, pubkey, args.assetid, args.assetfee, fee=fee, timestamp=timestamp)
 
     return data
 
