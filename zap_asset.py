@@ -234,7 +234,7 @@ def transfer_run(args, timestamp=0):
 def issue_run(args, timestamp=0):
     seed, address, pubkey = get_seed_addr_pubkey(args)
 
-    fee = pywaves.DEFAULT_TX_FEE
+    fee = pywaves.DEFAULT_ASSET_FEE
     if args.fee:
         fee = args.fee
 
@@ -245,7 +245,7 @@ def issue_run(args, timestamp=0):
 def reissue_run(args, timestamp=0):
     seed, address, pubkey = get_seed_addr_pubkey(args)
 
-    fee = pywaves.DEFAULT_TX_FEE
+    fee = pywaves.DEFAULT_ASSET_FEE
     if args.fee:
         fee = args.fee
 
