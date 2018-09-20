@@ -14,12 +14,15 @@ import pywaves
 import pywaves.crypto as crypto
 import base58
 
+DEFAULT_TX_FEE = 100000
+DEFAULT_ASSET_FEE = 100000000
+DEFAULT_SPONSOR_FEE = 100000000
 DEFAULT_SCRIPT_FEE = 1000000
 
 def waves_timestamp():
     return int(time.time() * 1000)
 
-def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachment='', feeAsset='', fee=pywaves.DEFAULT_TX_FEE, timestamp=0):
+def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
     if amount <= 0:
         msg = 'Amount must be > 0'
         logging.error(msg)
@@ -57,7 +60,7 @@ def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachme
 
         return data
 
-def issue_asset_payload(address, pubkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=pywaves.DEFAULT_ASSET_FEE, timestamp=0):
+def issue_asset_payload(address, pubkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=DEFAULT_ASSET_FEE, timestamp=0):
     if not address.privateKey:
         msg = 'Private key required'
         logging.error(msg)
@@ -107,7 +110,7 @@ def issue_asset_payload(address, pubkey, name, description, quantity, script=Non
 
         return data
 
-def reissue_asset_payload(address, pubkey, assetid, quantity, reissuable=False, fee=pywaves.DEFAULT_TX_FEE, timestamp=0):
+def reissue_asset_payload(address, pubkey, assetid, quantity, reissuable=False, fee=DEFAULT_TX_FEE, timestamp=0):
     if timestamp == 0:
         timestamp = waves_timestamp()
     sData = b'\5' + \
@@ -136,7 +139,7 @@ def reissue_asset_payload(address, pubkey, assetid, quantity, reissuable=False, 
 
     return data
 
-def sponsor_payload(address, pubkey, assetId, minimalFeeInAssets, fee=pywaves.DEFAULT_SPONSOR_FEE, timestamp=0):
+def sponsor_payload(address, pubkey, assetId, minimalFeeInAssets, fee=DEFAULT_SPONSOR_FEE, timestamp=0):
     if not address.privateKey:
         msg = 'Private key required'
         logging.error(msg)
@@ -223,7 +226,7 @@ def get_seed_addr_pubkey(args):
 def transfer_run(args, timestamp=0):
     seed, address, pubkey = get_seed_addr_pubkey(args)
 
-    fee = pywaves.DEFAULT_TX_FEE
+    fee = DEFAULT_TX_FEE
     if args.fee:
         fee = args.fee
 
@@ -234,7 +237,7 @@ def transfer_run(args, timestamp=0):
 def issue_run(args, timestamp=0):
     seed, address, pubkey = get_seed_addr_pubkey(args)
 
-    fee = pywaves.DEFAULT_ASSET_FEE
+    fee = DEFAULT_ASSET_FEE
     if args.fee:
         fee = args.fee
 
@@ -245,7 +248,7 @@ def issue_run(args, timestamp=0):
 def reissue_run(args, timestamp=0):
     seed, address, pubkey = get_seed_addr_pubkey(args)
 
-    fee = pywaves.DEFAULT_ASSET_FEE
+    fee = DEFAULT_ASSET_FEE
     if args.fee:
         fee = args.fee
 
@@ -255,7 +258,7 @@ def reissue_run(args, timestamp=0):
 def sponsor_run(args, timestamp=0):
     seed, address, pubkey = get_seed_addr_pubkey(args)
 
-    fee = pywaves.DEFAULT_SPONSOR_FEE
+    fee = DEFAULT_SPONSOR_FEE
     if args.fee:
         fee = args.fee
     
