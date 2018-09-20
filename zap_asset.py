@@ -18,6 +18,9 @@ import sha3
 import pyblake2
 
 CHAIN_ID = 'T'
+DEFAULT_TESTNET_HOST = "https://testnode1.wavesnodes.com"
+DEFAULT_MAINNET_HOST = "https://nodes.wavesnodes.com"
+HOST = DEFAULT_TESTNET_HOST
 
 DEFAULT_TX_FEE = 100000
 DEFAULT_ASSET_FEE = 100000000
@@ -234,8 +237,11 @@ def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE,
 def post(host, api, data):
     return requests.post('%s%s' % (host, api), data=data, headers={'content-type': 'application/json'}).json()
 
+def get(host, api):
+    return requests.get('%s%s' % (host, api)).json()
+
 def broadcast_tx(data):
-    return post(args.host, "/transactions/broadcast", data)
+    return post(HOST, "/transactions/broadcast", data)
 
 def get_seed_addr_pubkey(args):
     # get seed from user
@@ -336,15 +342,24 @@ def seed_run(args):
     pubkey = base58.b58decode(pubkey)
     print("Pubkey Hex: " + pubkey.hex())
 
-if __name__ == "__main__":
-    default_host = "https://testnode1.wavesnodes.com"
+def fees_run(args):
+    data = get(HOST, f"/addresses/scriptInfo/{args.account}")
+    if "error" in data:
+        print(data)
+    else:
+        extra_fee = data["extraFee"]
+        print(f"TX:      {DEFAULT_TX_FEE + extra_fee}")
+        print(f"ASSET:   {DEFAULT_ASSET_FEE + extra_fee}")
+        print(f"SPONSOR: {DEFAULT_SPONSOR_FEE + extra_fee}")
+        print(f"SCRIPT:  {DEFAULT_SCRIPT_FEE + extra_fee}")
 
+def parse_arguments():
     # parse arguments
     parser = argparse.ArgumentParser()
-    parser.add_argument("--host", type=str, default=default_host, help=f"Set node host (default: '{default_host})")
+    parser.add_argument("--host", type=str, help=f"Set node host (default: testnet - '{DEFAULT_TESTNET_HOST}, mainnet - '{DEFAULT_MAINNET_HOST})")
     parser.add_argument("-m", "--mainnet", action="store_true", help="Set to use mainnet (default: false)")
     parser.add_argument("-b", "--broadcast", action="store_true", help="If set broadcast the result (default: false)")
-    parser.add_argument("-s", "--save", type=str, help="Save the result to file (param is the filename to use)")
+    parser.add_argument("-s", "--save", type=str, help="Save the transaction to file (param is the filename to use)")
     parser.add_argument("-n", "--numsigners", type=int, default=1, help="The number of signers (default: 1)")
     parser.add_argument("-p", "--pubkey", type=str, help="The pubkey to use (required if a multisig transaction)")
     parser.add_argument("-f", "--fee", type=int, default=0, help="The fee to use (if you want to override the default)")
@@ -383,37 +398,12 @@ if __name__ == "__main__":
     parser_seed = subparsers.add_parser("seed", help="Convert a seed to an address")
     parser_seed.add_argument("seed", metavar="SEED", type=str, help="The seed")
 
-    args = parser.parse_args()
+    parser_fees = subparsers.add_parser("fees", help="Get the fees of a transactions for an account")
+    parser_fees.add_argument("account", metavar="ACCOUNT", type=str, help="The account to request fees for")
 
-    # set pywaves offline and chain
-    CHAIN_ID = 'T'
-    if args.mainnet:
-        CHAIN_ID = 'W'
+    return parser.parse_args()
 
-    # set appropriate function
-    command = None
-    if args.command == "transfer":
-        command = transfer_run
-    elif args.command == "issue":
-        command = issue_run
-    elif args.command == "reissue":
-        command = reissue_run
-    elif args.command == "sponsor":
-        command = sponsor_run
-    elif args.command == "script":
-        command = set_script_run
-    elif args.command == "script_remove":
-        command = set_script_remove_run
-    elif args.command == "broadcast_file":
-        broadcast_run(args)
-        sys.exit(0)
-    elif args.command == "seed":
-        seed_run(args)
-        sys.exit(0)
-    else:
-        parser.print_help()
-        sys.exit(1)
-
+def run_function(function):
     # run selected function
     if args.numsigners < 1:
         print("ERROR: numsigners must be an greater then or equal to 1")
@@ -421,7 +411,7 @@ if __name__ == "__main__":
     if args.numsigners == 1:
         # run without multisig
         print(":: sign tx (no multisig)")
-        data = command(args)
+        data = function(args)
         print(data)
     else:
         # run with multisig
@@ -439,7 +429,7 @@ if __name__ == "__main__":
                 if i != signerindex:
                     print("ERROR: user input does not match signer index!")
                     sys.exit(3)
-                data = command(args, timestamp=timestamp)
+                data = function(args, timestamp=timestamp)
                 tx = json.loads(data)
                 if "proofs" in tx:
                     sigs.append(tx["proofs"][0])
@@ -470,3 +460,42 @@ if __name__ == "__main__":
         print(":: broadcast")
         response = broadcast_tx(data)
         print(response)
+
+if __name__ == "__main__":
+    args = parse_arguments()
+
+    # set pywaves offline and chain
+    CHAIN_ID = 'T'
+    HOST = DEFAULT_TESTNET_HOST
+    if args.mainnet:
+        CHAIN_ID = 'W'
+        HOST = DEFAULT_MAINNET_HOST
+    if args.host:
+        HOST = args.host
+
+    # set appropriate function
+    function = None
+    if args.command == "transfer":
+        function = transfer_run
+    elif args.command == "issue":
+        function = issue_run
+    elif args.command == "reissue":
+        function = reissue_run
+    elif args.command == "sponsor":
+        function = sponsor_run
+    elif args.command == "script":
+        function = set_script_run
+    elif args.command == "script_remove":
+        function = set_script_remove_run
+    elif args.command == "broadcast_file":
+        broadcast_run(args)
+    elif args.command == "seed":
+        seed_run(args)
+    elif args.command == "fees":
+        fees_run(args)
+    else:
+        parser.print_help()
+        sys.exit(1)
+
+    if function:
+        run_function(function)
