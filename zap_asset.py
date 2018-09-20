@@ -234,6 +234,9 @@ def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE,
 def post(host, api, data):
     return requests.post('%s%s' % (host, api), data=data, headers={'content-type': 'application/json'}).json()
 
+def broadcast_tx(data):
+    return post(args.host, "/transactions/broadcast", data)
+
 def get_seed_addr_pubkey(args):
     # get seed from user
     seed = getpass.getpass("Seed: ")
@@ -318,6 +321,14 @@ def set_script_remove_run(args, timestamp=0):
 
     return set_script_payload(address, pubkey, privkey, None, fee=fee, timestamp=timestamp)
 
+def broadcast_run(args):
+    # read tx data
+    with open(args.filename, "r") as f:
+        data = f.read()
+
+    response = broadcast_tx(data)
+    print(response)
+
 def seed_run(args):
     address, pubkey, privkey = generate_account(args.seed, CHAIN_ID)
     print("Address: " + address)
@@ -333,6 +344,7 @@ if __name__ == "__main__":
     parser.add_argument("--host", type=str, default=default_host, help=f"Set node host (default: '{default_host})")
     parser.add_argument("-m", "--mainnet", action="store_true", help="Set to use mainnet (default: false)")
     parser.add_argument("-b", "--broadcast", action="store_true", help="If set broadcast the result (default: false)")
+    parser.add_argument("-s", "--save", type=str, help="Save the result to file (param is the filename to use)")
     parser.add_argument("-n", "--numsigners", type=int, default=1, help="The number of signers (default: 1)")
     parser.add_argument("-p", "--pubkey", type=str, help="The pubkey to use (required if a multisig transaction)")
     parser.add_argument("-f", "--fee", type=int, default=0, help="The fee to use (if you want to override the default)")
@@ -365,6 +377,9 @@ if __name__ == "__main__":
     parser_script_remove = subparsers.add_parser("script_remove", help="Remove a script from a waves account")
     parser_script_remove.add_argument("account", metavar="ACCOUNT", type=str, help="The account to remove the `script from")
 
+    parser_broadcast_file = subparsers.add_parser("broadcast_file", help="Broadcast a signed transaction read from a file")
+    parser_broadcast_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
+
     parser_seed = subparsers.add_parser("seed", help="Convert a seed to an address")
     parser_seed.add_argument("seed", metavar="SEED", type=str, help="The seed")
 
@@ -389,6 +404,9 @@ if __name__ == "__main__":
         command = set_script_run
     elif args.command == "script_remove":
         command = set_script_remove_run
+    elif args.command == "broadcast_file":
+        broadcast_run(args)
+        sys.exit(0)
     elif args.command == "seed":
         seed_run(args)
         sys.exit(0)
@@ -439,10 +457,16 @@ if __name__ == "__main__":
         tx["proofs"] = sigs
         print(":: final tx")
         print(tx)
-        data = json.dumps(tx)
+        data = json.dumps(tx, indent=4)
+
+    # save
+    if args.save:
+        print(f":: save (to '{args.save}')")
+        with open(args.save, "w") as f:
+            f.write(data)
 
     # broadcast
     if args.broadcast:
         print(":: broadcast")
-        response = post(args.host, "/transactions/broadcast", data)
+        response = broadcast_tx(data)
         print(response)
