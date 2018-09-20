@@ -7,30 +7,71 @@ import json
 import base64
 import time
 import struct
+import os
+import random
+import hashlib
 
 import requests
-import pywaves as pw
-import pywaves
-import pywaves.crypto as crypto
 import base58
+import axolotl_curve25519 as curve
+import sha3
+import pyblake2
+
+CHAIN_ID = 'T'
 
 DEFAULT_TX_FEE = 100000
 DEFAULT_ASSET_FEE = 100000000
 DEFAULT_SPONSOR_FEE = 100000000
 DEFAULT_SCRIPT_FEE = 1000000
 
+def throw_error(msg):
+    raise Exception(msg)
+
+def str2bytes(s):
+    # warning this method is flawed with some input
+    return s.encode("latin-1")
+
+def sign(privkey, message):
+    random64 = os.urandom(64)
+    return base58.b58encode(curve.calculateSignature(random64, base58.b58decode(privkey), message))
+
+def sha256(data):
+    return hashlib.sha256(data).digest()
+
+def waves_hash(data):
+    hash1 = pyblake2.blake2b(data, digest_size=32).digest()
+    hash2 = sha3.keccak_256(hash1).digest()
+    return hash2
+
+def generate_account(seed, chain_id, nonce=0):
+    # convert input to bytes
+    seed = str2bytes(seed)
+    chain_id = str2bytes(chain_id)
+    nonce = nonce.to_bytes(length=4, byteorder='big')
+    # generate stuff
+    account_seed = waves_hash(nonce + seed)
+    privkey = curve.generatePrivateKey(sha256(account_seed))
+    pubkey = curve.generatePublicKey(privkey)
+    address_version = bytes([1])
+    address = address_version + chain_id + waves_hash(pubkey)[:20]
+    # convert output to base58
+    checksum = waves_hash(address)[:4]
+    address = base58.b58encode(address + checksum)
+    pubkey = base58.b58encode(pubkey)
+    privkey = base58.b58encode(privkey)
+    return address, pubkey, privkey
+
 def waves_timestamp():
     return int(time.time() * 1000)
 
-def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
+def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
     if amount <= 0:
         msg = 'Amount must be > 0'
-        logging.error(msg)
-        pywaves.throw_error(msg)
+        throw_error(msg)
     else:
         if timestamp == 0:
             timestamp = waves_timestamp()
-        sData = b'\4' + \
+        sdata = b'\4' + \
             b'\2' + \
             base58.b58decode(pubkey) + \
             (b'\1' + base58.b58decode(assetid) if assetid else b'\0') + \
@@ -40,8 +81,8 @@ def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachme
             struct.pack(">Q", fee) + \
             base58.b58decode(recipient) + \
             struct.pack(">H", len(attachment)) + \
-            crypto.str2bytes(attachment)
-        signature = crypto.sign(address.privateKey, sData)
+            str2bytes(attachment)
+        signature = sign(privkey, sdata)
         data = json.dumps({
             "type": 4,
             "version": 2,
@@ -52,7 +93,7 @@ def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachme
             "amount": amount,
             "fee": fee,
             "timestamp": timestamp,
-            "attachment": base58.b58encode(crypto.str2bytes(attachment)),
+            "attachment": base58.b58encode(str2bytes(attachment)),
             "proofs": [
                 signature
             ]
@@ -60,15 +101,10 @@ def transfer_asset_payload(address, pubkey, recipient, assetid, amount, attachme
 
         return data
 
-def issue_asset_payload(address, pubkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=DEFAULT_ASSET_FEE, timestamp=0):
-    if not address.privateKey:
-        msg = 'Private key required'
-        logging.error(msg)
-        pywaves.throw_error(msg)
-    elif len(name) < 4 or len(name) > 16:
+def issue_asset_payload(address, pubkey, privkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=DEFAULT_ASSET_FEE, timestamp=0):
+    if len(name) < 4 or len(name) > 16:
         msg = 'Asset name must be between 4 and 16 characters long'
-        logging.error(msg)
-        pywaves.throw_error(msg)
+        throw_error(msg)
     else:
         # it looks like script can always be 'None' (might be a bug)
         if script:
@@ -76,14 +112,14 @@ def issue_asset_payload(address, pubkey, name, description, quantity, script=Non
             scriptLength = len(rawScript)
         if timestamp == 0:
             timestamp = waves_timestamp()
-        sData = b'\3' + \
+        sdata = b'\3' + \
             b'\2' + \
-            crypto.str2bytes(str(pywaves.CHAIN_ID)) + \
+            str2bytes(str(CHAIN_ID)) + \
             base58.b58decode(pubkey) + \
             struct.pack(">H", len(name)) + \
-            crypto.str2bytes(name) + \
+            str2bytes(name) + \
             struct.pack(">H", len(description)) + \
-            crypto.str2bytes(description) + \
+            str2bytes(description) + \
             struct.pack(">Q", quantity) + \
             struct.pack(">B", decimals) + \
             (b'\1' if reissuable else b'\0') + \
@@ -91,7 +127,7 @@ def issue_asset_payload(address, pubkey, name, description, quantity, script=Non
             struct.pack(">Q", timestamp) + \
             (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0')
 
-        signature=crypto.sign(address.privateKey, sData)
+        signature=sign(privkey, sdata)
         data = json.dumps({
             "type": 3,
             "version": 2,
@@ -110,19 +146,19 @@ def issue_asset_payload(address, pubkey, name, description, quantity, script=Non
 
         return data
 
-def reissue_asset_payload(address, pubkey, assetid, quantity, reissuable=False, fee=DEFAULT_TX_FEE, timestamp=0):
+def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuable=False, fee=DEFAULT_TX_FEE, timestamp=0):
     if timestamp == 0:
         timestamp = waves_timestamp()
-    sData = b'\5' + \
+    sdata = b'\5' + \
         b'\2' + \
-        crypto.str2bytes(str(pywaves.CHAIN_ID)) + \
+        str2bytes(str(CHAIN_ID)) + \
         base58.b58decode(pubkey) + \
         base58.b58decode(assetid) + \
         struct.pack(">Q", quantity) + \
         (b'\1' if reissuable else b'\0') + \
         struct.pack(">Q",fee) + \
         struct.pack(">Q", timestamp)
-    signature = crypto.sign(address.privateKey, sData)
+    signature = sign(privkey, sdata)
     data = json.dumps({
         "type": 5,
         "version": 2,
@@ -139,52 +175,47 @@ def reissue_asset_payload(address, pubkey, assetid, quantity, reissuable=False, 
 
     return data
 
-def sponsor_payload(address, pubkey, assetId, minimalFeeInAssets, fee=DEFAULT_SPONSOR_FEE, timestamp=0):
-    if not address.privateKey:
-        msg = 'Private key required'
-        logging.error(msg)
-        pywaves.throw_error(msg)
-    else:
-        if timestamp == 0:
-            timestamp = int(time.time() * 1000)
-        sData = b'\x0e' + \
-            b'\1' + \
-            base58.b58decode(pubkey) + \
-            base58.b58decode(assetId) + \
-            struct.pack(">Q", minimalFeeInAssets) + \
-            struct.pack(">Q", fee) + \
-            struct.pack(">Q", timestamp)
-        signature = crypto.sign(address.privateKey, sData)
+def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=DEFAULT_SPONSOR_FEE, timestamp=0):
+    if timestamp == 0:
+        timestamp = int(time.time() * 1000)
+    sdata = b'\x0e' + \
+        b'\1' + \
+        base58.b58decode(pubkey) + \
+        base58.b58decode(assetId) + \
+        struct.pack(">Q", minimalFeeInAssets) + \
+        struct.pack(">Q", fee) + \
+        struct.pack(">Q", timestamp)
+    signature = sign(privkey, sdata)
 
-        data = json.dumps({
-            "type": 14,
-            "version": 1,
-            "senderPublicKey": pubkey,
-            "assetId": assetId,
-            "fee": fee,
-            "timestamp": timestamp,
-            "minSponsoredAssetFee": minimalFeeInAssets,
-            "proofs": [
-                signature
-            ]
-        }, indent=4)
+    data = json.dumps({
+        "type": 14,
+        "version": 1,
+        "senderPublicKey": pubkey,
+        "assetId": assetId,
+        "fee": fee,
+        "timestamp": timestamp,
+        "minSponsoredAssetFee": minimalFeeInAssets,
+        "proofs": [
+            signature
+        ]
+    }, indent=4)
 
-        return data
+    return data
 
-def set_script_payload(address, pubkey, script, fee=DEFAULT_SCRIPT_FEE, timestamp=0):
+def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE, timestamp=0):
     if script:
         rawScript = base64.b64decode(script)
         scriptLength = len(rawScript)
     if timestamp == 0:
         timestamp = waves_timestamp()
-    sData = b'\x0d' + \
+    sdata = b'\x0d' + \
         b'\1' + \
-        crypto.str2bytes(str(pywaves.CHAIN_ID)) + \
+        str2bytes(str(CHAIN_ID)) + \
         base58.b58decode(pubkey) + \
         (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0') + \
         struct.pack(">Q", fee) + \
         struct.pack(">Q", timestamp)
-    signature = crypto.sign(address.privateKey, sData)
+    signature = sign(privkey, sdata)
 
     data = json.dumps({
         "type": 13,
@@ -208,66 +239,65 @@ def get_seed_addr_pubkey(args):
     seed = getpass.getpass("Seed: ")
 
     # create address
-    address = pw.Address(seed=seed)
-    print("Address: " + address.address)
+    address, pubkey, privkey = generate_account(seed, CHAIN_ID)
+    print("Address: " + address)
 
     # check seed matches address
-    if args.numsigners == 1 and address.address != args.account:
+    if args.numsigners == 1 and address != args.account:
         print("Account does not match seed!")
         sys.exit(10)
 
-    # select pubkey
-    pubkey = address.publicKey
+    # override pubkey
     if args.pubkey:
         pubkey = args.pubkey
 
-    return seed, address, pubkey
+    return seed, address, pubkey, privkey
 
 def transfer_run(args, timestamp=0):
-    seed, address, pubkey = get_seed_addr_pubkey(args)
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
     fee = DEFAULT_TX_FEE
     if args.fee:
         fee = args.fee
 
-    data = transfer_asset_payload(address, pubkey, args.recipient, args.assetid, args.amount, fee=fee, timestamp=timestamp)
+    data = transfer_asset_payload(address, pubkey, privkey, args.recipient, args.assetid, args.amount, fee=fee, timestamp=timestamp)
 
     return data
 
 def issue_run(args, timestamp=0):
-    seed, address, pubkey = get_seed_addr_pubkey(args)
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
     fee = DEFAULT_ASSET_FEE
     if args.fee:
         fee = args.fee
 
-    data = issue_asset_payload(address, pubkey, "ZAP!", "", args.amount, decimals=2, reissuable=True, fee=fee, timestamp=timestamp)
+    data = issue_asset_payload(address, pubkey, privkey, "ZAP!", "", args.amount, decimals=2, reissuable=True, fee=fee, timestamp=timestamp)
 
     return data
 
 def reissue_run(args, timestamp=0):
-    seed, address, pubkey = get_seed_addr_pubkey(args)
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
     fee = DEFAULT_ASSET_FEE
     if args.fee:
         fee = args.fee
 
-    data = reissue_asset_payload(address, pubkey, args.assetid, args.amount, reissuable=True, fee=fee, timestamp=timestamp)
+    data = reissue_asset_payload(address, pubkey, privkey, args.assetid, args.amount, reissuable=True, fee=fee, timestamp=timestamp)
     return data
 
 def sponsor_run(args, timestamp=0):
-    seed, address, pubkey = get_seed_addr_pubkey(args)
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
     fee = DEFAULT_SPONSOR_FEE
     if args.fee:
         fee = args.fee
     
-    data = sponsor_payload(address, pubkey, args.assetid, args.assetfee, fee=fee, timestamp=timestamp)
+    data = sponsor_payload(address, pubkey, privkey, args.assetid, args.assetfee, fee=fee, timestamp=timestamp)
 
     return data
 
 def set_script_run(args, timestamp=0):
-    seed, address, pubkey = get_seed_addr_pubkey(args)
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
     fee = DEFAULT_SCRIPT_FEE
     if args.fee:
@@ -277,22 +307,22 @@ def set_script_run(args, timestamp=0):
     with open(args.filename, "r") as f:
         script = f.read().replace("\n", "")
 
-    return set_script_payload(address, pubkey, script, fee=fee, timestamp=timestamp)
+    return set_script_payload(address, pubkey, privkey, script, fee=fee, timestamp=timestamp)
 
 def set_script_remove_run(args, timestamp=0):
-    seed, address, pubkey = get_seed_addr_pubkey(args)
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
     fee = DEFAULT_SCRIPT_FEE
     if args.fee:
         fee = args.fee
 
-    return set_script_payload(address, pubkey, None, fee=fee, timestamp=timestamp)
+    return set_script_payload(address, pubkey, privkey, None, fee=fee, timestamp=timestamp)
 
 def seed_run(args):
-    address = pw.Address(seed=args.seed)
-    print("Address: " + address.address)
-    print("Pubkey: " + address.publicKey)
-    pubkey = base58.b58decode(address.publicKey) 
+    address, pubkey, privkey = generate_account(args.seed, CHAIN_ID)
+    print("Address: " + address)
+    print("Pubkey: " + pubkey)
+    pubkey = base58.b58decode(pubkey)
     print("Pubkey Hex: " + pubkey.hex())
 
 if __name__ == "__main__":
@@ -341,10 +371,9 @@ if __name__ == "__main__":
     args = parser.parse_args()
 
     # set pywaves offline and chain
-    pw.setOffline()
-    pw.setChain("testnet")
+    CHAIN_ID = 'T'
     if args.mainnet:
-        pw.setChain("mainnet")
+        CHAIN_ID = 'W'
 
     # set appropriate function
     command = None
