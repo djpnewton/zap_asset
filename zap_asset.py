@@ -394,6 +394,7 @@ def construct_parser():
     parser.add_argument("-n", "--numsigners", type=int, default=1, help="The number of signers (default: 1)")
     parser.add_argument("-p", "--pubkey", type=str, help="The pubkey to use (required if a multisig transaction)")
     parser.add_argument("-f", "--fee", type=int, default=0, help="The fee to use (if you want to override the default)")
+    parser.add_argument("-t", "--timestamp", type=int, help="The timestamp to use (if you want to override the default - ie current time)")
     subparsers = parser.add_subparsers(dest="command")
 
     parser_transfer = subparsers.add_parser("transfer", help="Transfer an asset")
@@ -435,6 +436,10 @@ def construct_parser():
     return parser
 
 def run_function(function):
+    # set timestamp
+    timestamp = waves_timestamp()
+    if args.timestamp:
+        timestamp = args.timestamp
     # run selected function
     if args.numsigners < 0:
         print("ERROR: numsigners must be an greater then or equal to 0")
@@ -442,16 +447,15 @@ def run_function(function):
     if args.numsigners == 0:
         # run without signing
         print(":: bare tx (no signing)")
-        data = function(args)
+        data = function(args, timestamp=timestamp)
         print(data)
     elif args.numsigners == 1:
         # run without multisig
         print(":: sign tx (no multisig)")
-        data = function(args)
+        data = function(args, timestamp=timestamp)
         print(data)
     else:
         # run with multisig
-        timestamp = waves_timestamp()
         sigs = []
         txs = []
         for signerindex in range(args.numsigners):
