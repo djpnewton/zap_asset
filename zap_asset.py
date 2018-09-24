@@ -46,22 +46,32 @@ def waves_hash(data):
     hash2 = sha3.keccak_256(hash1).digest()
     return hash2
 
+def generate_address(pubkey, chain_id):
+    # convert input to bytes
+    chain_id = str2bytes(chain_id)
+    # decode base58 pubkey
+    pubkey = base58.b58decode(pubkey)
+    # create address
+    address_version = bytes([1])
+    address = address_version + chain_id + waves_hash(pubkey)[:20]
+    checksum = waves_hash(address)[:4]
+    # base58 encode pubkey
+    address = base58.b58encode(address + checksum)
+    return address
+
 def generate_account(seed, chain_id, nonce=0):
     # convert input to bytes
     seed = str2bytes(seed)
-    chain_id = str2bytes(chain_id)
     nonce = nonce.to_bytes(length=4, byteorder='big')
     # generate stuff
     account_seed = waves_hash(nonce + seed)
     privkey = curve.generatePrivateKey(sha256(account_seed))
     pubkey = curve.generatePublicKey(privkey)
-    address_version = bytes([1])
-    address = address_version + chain_id + waves_hash(pubkey)[:20]
-    # convert output to base58
-    checksum = waves_hash(address)[:4]
-    address = base58.b58encode(address + checksum)
+    # convert pubkey/privkey to base58
     pubkey = base58.b58encode(pubkey)
     privkey = base58.b58encode(privkey)
+    # finally create address
+    address = generate_address(pubkey, chain_id)
     return address, pubkey, privkey
 
 def waves_timestamp():
@@ -85,7 +95,9 @@ def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount,
             base58.b58decode(recipient) + \
             struct.pack(">H", len(attachment)) + \
             str2bytes(attachment)
-        signature = sign(privkey, sdata)
+        signature = None
+        if privkey:
+            signature = sign(privkey, sdata)
         data = json.dumps({
             "type": 4,
             "version": 2,
@@ -130,7 +142,9 @@ def issue_asset_payload(address, pubkey, privkey, name, description, quantity, s
             struct.pack(">Q", timestamp) + \
             (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0')
 
-        signature=sign(privkey, sdata)
+        signature = None
+        if privkey:
+            signature = sign(privkey, sdata)
         data = json.dumps({
             "type": 3,
             "version": 2,
@@ -161,7 +175,9 @@ def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuabl
         (b'\1' if reissuable else b'\0') + \
         struct.pack(">Q",fee) + \
         struct.pack(">Q", timestamp)
-    signature = sign(privkey, sdata)
+    signature = None
+    if privkey:
+        signature = sign(privkey, sdata)
     data = json.dumps({
         "type": 5,
         "version": 2,
@@ -188,7 +204,9 @@ def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=D
         struct.pack(">Q", minimalFeeInAssets) + \
         struct.pack(">Q", fee) + \
         struct.pack(">Q", timestamp)
-    signature = sign(privkey, sdata)
+    signature = None
+    if privkey:
+        signature = sign(privkey, sdata)
 
     data = json.dumps({
         "type": 14,
@@ -218,7 +236,9 @@ def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE,
         (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0') + \
         struct.pack(">Q", fee) + \
         struct.pack(">Q", timestamp)
-    signature = sign(privkey, sdata)
+    signature = None
+    if privkey:
+        signature = sign(privkey, sdata)
 
     data = json.dumps({
         "type": 13,
@@ -244,21 +264,32 @@ def broadcast_tx(data):
     return post(HOST, "/transactions/broadcast", data)
 
 def get_seed_addr_pubkey(args):
-    # get seed from user
-    seed = getpass.getpass("Seed: ")
+    if args.numsigners >= 1:
+        # get seed from user
+        seed = getpass.getpass("Seed: ")
 
-    # create address
-    address, pubkey, privkey = generate_account(seed, CHAIN_ID)
-    print("Address: " + address)
+        # create address
+        address, pubkey, privkey = generate_account(seed, CHAIN_ID)
+        print("Address: " + address)
 
-    # check seed matches address
-    if args.numsigners == 1 and address != args.account:
-        print("Account does not match seed!")
-        sys.exit(10)
+        # check seed matches address
+        if args.numsigners == 1 and address != args.account:
+            print("ERROR: Account does not match seed!")
+            sys.exit(10)
 
-    # override pubkey
-    if args.pubkey:
+        # override pubkey
+        if args.pubkey:
+            pubkey = args.pubkey
+    else:
+        if not args.pubkey:
+            print("ERROR: if not signing a pubkey must be provided!")
+            sys.exit(11)
+
+        # create address
+        seed = None
+        privkey = None
         pubkey = args.pubkey
+        address = generate_address(pubkey, CHAIN_ID)
 
     return seed, address, pubkey, privkey
 
@@ -353,8 +384,8 @@ def fees_run(args):
         print(f"SPONSOR: {DEFAULT_SPONSOR_FEE + extra_fee}")
         print(f"SCRIPT:  {DEFAULT_SCRIPT_FEE + extra_fee}")
 
-def parse_arguments():
-    # parse arguments
+def construct_parser():
+    # construct argument parser
     parser = argparse.ArgumentParser()
     parser.add_argument("--host", type=str, help=f"Set node host (default: testnet - '{DEFAULT_TESTNET_HOST}, mainnet - '{DEFAULT_MAINNET_HOST})")
     parser.add_argument("-m", "--mainnet", action="store_true", help="Set to use mainnet (default: false)")
@@ -401,14 +432,19 @@ def parse_arguments():
     parser_fees = subparsers.add_parser("fees", help="Get the fees of a transactions for an account")
     parser_fees.add_argument("account", metavar="ACCOUNT", type=str, help="The account to request fees for")
 
-    return parser.parse_args()
+    return parser
 
 def run_function(function):
     # run selected function
-    if args.numsigners < 1:
-        print("ERROR: numsigners must be an greater then or equal to 1")
+    if args.numsigners < 0:
+        print("ERROR: numsigners must be an greater then or equal to 0")
         sys.exit(2)
-    if args.numsigners == 1:
+    if args.numsigners == 0:
+        # run without signing
+        print(":: bare tx (no signing)")
+        data = function(args)
+        print(data)
+    elif args.numsigners == 1:
         # run without multisig
         print(":: sign tx (no multisig)")
         data = function(args)
@@ -462,7 +498,8 @@ def run_function(function):
         print(response)
 
 if __name__ == "__main__":
-    args = parse_arguments()
+    parser = construct_parser()
+    args = parser.parse_args()
 
     # set pywaves offline and chain
     CHAIN_ID = 'T'
