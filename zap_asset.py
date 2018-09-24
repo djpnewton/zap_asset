@@ -77,6 +77,9 @@ def generate_account(seed, chain_id, nonce=0):
 def waves_timestamp():
     return int(time.time() * 1000)
 
+def json_dumps(obj):
+    return json.dumps(obj, indent=4)
+
 def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
     if amount <= 0:
         msg = 'Amount must be > 0'
@@ -95,10 +98,10 @@ def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount,
             base58.b58decode(recipient) + \
             struct.pack(">H", len(attachment)) + \
             str2bytes(attachment)
-        signature = None
+        signature = ""
         if privkey:
             signature = sign(privkey, sdata)
-        data = json.dumps({
+        data = json_dumps({
             "type": 4,
             "version": 2,
             "senderPublicKey": pubkey,
@@ -112,7 +115,7 @@ def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount,
             "proofs": [
                 signature
             ]
-        }, indent=4)
+        })
 
         return data
 
@@ -142,10 +145,10 @@ def issue_asset_payload(address, pubkey, privkey, name, description, quantity, s
             struct.pack(">Q", timestamp) + \
             (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0')
 
-        signature = None
+        signature = ""
         if privkey:
             signature = sign(privkey, sdata)
-        data = json.dumps({
+        data = json_dumps({
             "type": 3,
             "version": 2,
             "senderPublicKey": pubkey,
@@ -159,7 +162,7 @@ def issue_asset_payload(address, pubkey, privkey, name, description, quantity, s
             "proofs": [
                 signature
             ]
-        }, indent=4)
+        })
 
         return data
 
@@ -175,10 +178,10 @@ def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuabl
         (b'\1' if reissuable else b'\0') + \
         struct.pack(">Q",fee) + \
         struct.pack(">Q", timestamp)
-    signature = None
+    signature = ""
     if privkey:
         signature = sign(privkey, sdata)
-    data = json.dumps({
+    data = json_dumps({
         "type": 5,
         "version": 2,
         "senderPublicKey": pubkey,
@@ -190,7 +193,7 @@ def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuabl
         "proofs": [
             signature
         ]
-    }, indent=4)
+    })
 
     return data
 
@@ -204,11 +207,11 @@ def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=D
         struct.pack(">Q", minimalFeeInAssets) + \
         struct.pack(">Q", fee) + \
         struct.pack(">Q", timestamp)
-    signature = None
+    signature = ""
     if privkey:
         signature = sign(privkey, sdata)
 
-    data = json.dumps({
+    data = json_dumps({
         "type": 14,
         "version": 1,
         "senderPublicKey": pubkey,
@@ -219,7 +222,7 @@ def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=D
         "proofs": [
             signature
         ]
-    }, indent=4)
+    })
 
     return data
 
@@ -236,11 +239,11 @@ def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE,
         (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0') + \
         struct.pack(">Q", fee) + \
         struct.pack(">Q", timestamp)
-    signature = None
+    signature = ""
     if privkey:
         signature = sign(privkey, sdata)
 
-    data = json.dumps({
+    data = json_dumps({
         "type": 13,
         "version": 1,
         "senderPublicKey": pubkey,
@@ -250,7 +253,7 @@ def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE,
         "proofs": [
             signature
         ]
-    }, indent=4)
+    })
 
     return data
 
@@ -264,23 +267,8 @@ def broadcast_tx(data):
     return post(HOST, "/transactions/broadcast", data)
 
 def get_seed_addr_pubkey(args):
-    if args.numsigners >= 1:
-        # get seed from user
-        seed = getpass.getpass("Seed: ")
-
-        # create address
-        address, pubkey, privkey = generate_account(seed, CHAIN_ID)
-        print("Address: " + address)
-
-        # check seed matches address
-        if args.numsigners == 1 and address != args.account:
-            print("ERROR: Account does not match seed!")
-            sys.exit(10)
-
-        # override pubkey
-        if args.pubkey:
-            pubkey = args.pubkey
-    else:
+    if args.template:
+        # check pubkey is provided
         if not args.pubkey:
             print("ERROR: if not signing a pubkey must be provided!")
             sys.exit(11)
@@ -290,6 +278,22 @@ def get_seed_addr_pubkey(args):
         privkey = None
         pubkey = args.pubkey
         address = generate_address(pubkey, CHAIN_ID)
+    else:
+        # get seed from user
+        seed = getpass.getpass("Seed: ")
+
+        # create address
+        address, pubkey, privkey = generate_account(seed, CHAIN_ID)
+        print("Address: " + address)
+
+        # override pubkey
+        if args.pubkey:
+            pubkey = args.pubkey
+
+    # check address from pubkey matches args.account
+    if address != args.account:
+        print("ERROR: Account does not match seed/pubkey!")
+        sys.exit(10)
 
     return seed, address, pubkey, privkey
 
@@ -391,6 +395,7 @@ def construct_parser():
     parser.add_argument("-m", "--mainnet", action="store_true", help="Set to use mainnet (default: false)")
     parser.add_argument("-b", "--broadcast", action="store_true", help="If set broadcast the result (default: false)")
     parser.add_argument("-s", "--save", type=str, help="Save the transaction to file (param is the filename to use)")
+    parser.add_argument("-T", "--template", action="store_true", help="No signing, just create a transaction template")
     parser.add_argument("-n", "--numsigners", type=int, default=1, help="The number of signers (default: 1)")
     parser.add_argument("-p", "--pubkey", type=str, help="The pubkey to use (required if a multisig transaction)")
     parser.add_argument("-f", "--fee", type=int, default=0, help="The fee to use (if you want to override the default)")
@@ -441,13 +446,19 @@ def run_function(function):
     if args.timestamp:
         timestamp = args.timestamp
     # run selected function
-    if args.numsigners < 0:
-        print("ERROR: numsigners must be an greater then or equal to 0")
+    if args.numsigners < 1:
+        print("ERROR: numsigners must be an greater then or equal to 1")
         sys.exit(2)
-    if args.numsigners == 0:
+    if args.template:
         # run without signing
-        print(":: bare tx (no signing)")
+        print(":: template tx (no signing)")
         data = function(args, timestamp=timestamp)
+
+        # fill dummy sigs
+        tx = json.loads(data)
+        tx["signature"] = args.numsigners * ["todo"]
+        data = json_dumps(tx)
+
         print(data)
     elif args.numsigners == 1:
         # run without multisig
@@ -487,7 +498,7 @@ def run_function(function):
         tx["proofs"] = sigs
         print(":: final tx")
         print(tx)
-        data = json.dumps(tx, indent=4)
+        data = json_dumps(tx)
 
     # save
     if args.save:
