@@ -291,7 +291,7 @@ def get_seed_addr_pubkey(args):
             pubkey = args.pubkey
 
     # check address from pubkey matches args.account
-    if address != args.account:
+    if hasattr(args, "account") and address != args.account:
         print("ERROR: Account does not match seed/pubkey!")
         sys.exit(10)
 
@@ -362,6 +362,49 @@ def set_script_remove_run(args, timestamp=0):
 
     return set_script_payload(address, pubkey, privkey, None, fee=fee, timestamp=timestamp)
 
+def sign_run(args):
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
+
+    # read tx data
+    with open(args.filename, "r") as f:
+        data = f.read()
+
+    # create sig
+    tx = json.loads(data)
+    type = tx["type"]
+    if type == 4:
+        print(":: transfer tx")
+        tmp = transfer_asset_payload(None, pubkey, privkey, tx["recipient"], tx["assetId"], tx["amount"], \
+            tx["attachment"], tx["feeAssetId"], tx["fee"], tx["timestamp"])
+    elif type == 3:
+        print(":: issue tx")
+        tmp = issue_asset_payload(None, pubkey, privkey, tx["name"], tx["description"], tx["quantity"], \
+            None, tx["decimals"], tx["reissuable"], tx["fee"], tx["timestamp"])
+    elif type == 5:
+        print(":: reissue tx")
+        tmp = reissue_asset_payload(None, pubkey, privkey, tx["assetId"], tx["quantity"], tx["reissuable"], \
+            tx["fee"], tx["timestamp"])
+    elif type == 14:
+        print(":: sponsor tx")
+        tmp = sponsor_payload(None, pubkey, privkey, tx["assetId"], tx["minSponsoredAssetFee"], tx["fee"], \
+            tx["timestamp"])
+    elif type == 13:
+        print(":: set script tx")
+        tmp = set_script_payload(None, pubkey, privkey, tx["script"], tx["fee"], tx["timestamp"])
+    signature = json.loads(tmp)["proofs"][0]
+
+    # insert sig
+    tx["proofs"][args.signerindex] = signature
+    print(tx)
+    data = json_dumps(tx)
+
+    # write
+    filename = args.filename + "_signed%02d" % args.signerindex
+    print(f"::save (to '{filename}'")
+    with open(args.filename, "w") as f:
+        f.write(data)
+    print(data)
+
 def broadcast_run(args):
     # read tx data
     with open(args.filename, "r") as f:
@@ -429,6 +472,10 @@ def construct_parser():
     parser_script_remove = subparsers.add_parser("script_remove", help="Remove a script from a waves account")
     parser_script_remove.add_argument("account", metavar="ACCOUNT", type=str, help="The account to remove the `script from")
 
+    parser_sign_file = subparsers.add_parser("sign_file", help="Broadcast a signed transaction read from a file")
+    parser_sign_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
+    parser_sign_file.add_argument("signerindex", metavar="SIGNERINDEX", type=int, help="The index (0 based) of the signer")
+
     parser_broadcast_file = subparsers.add_parser("broadcast_file", help="Broadcast a signed transaction read from a file")
     parser_broadcast_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
 
@@ -454,9 +501,9 @@ def run_function(function):
         print(":: template tx (no signing)")
         data = function(args, timestamp=timestamp)
 
-        # fill dummy sigs
+        # fill dummy proofs
         tx = json.loads(data)
-        tx["signature"] = args.numsigners * ["todo"]
+        tx["proofs"] = args.numsigners * ["todo"]
         data = json_dumps(tx)
 
         print(data)
@@ -539,6 +586,8 @@ if __name__ == "__main__":
         function = set_script_run
     elif args.command == "script_remove":
         function = set_script_remove_run
+    elif args.command == "sign_file":
+        sign_run(args)
     elif args.command == "broadcast_file":
         broadcast_run(args)
     elif args.command == "seed":
