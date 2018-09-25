@@ -403,7 +403,7 @@ def sign_run(args):
     # write
     filename = args.filename + "_signed%02d" % args.signerindex
     print(f"::save (to '{filename}'")
-    with open(args.filename, "w") as f:
+    with open(filename, "w") as f:
         f.write(data)
     print(data)
 
