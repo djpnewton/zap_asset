@@ -17,6 +17,7 @@ import base58
 import axolotl_curve25519 as curve
 import sha3
 import pyblake2
+import mnemonic
 
 CHAIN_ID = 'T'
 DEFAULT_TESTNET_HOST = "https://testnode1.wavesnodes.com"
@@ -414,6 +415,10 @@ def broadcast_run(args):
     response = broadcast_tx(data)
     print(response)
 
+def mnemonic_run(args):
+    m = mnemonic.Mnemonic("english")
+    print("Mnemonic: " + m.generate())
+
 def seed_run(args):
     address, pubkey, privkey = generate_account(args.seed, CHAIN_ID)
     print("Address: " + address)
@@ -479,6 +484,8 @@ def construct_parser():
 
     parser_broadcast_file = subparsers.add_parser("broadcast_file", help="Broadcast a signed transaction read from a file")
     parser_broadcast_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
+
+    parser_mnemonic = subparsers.add_parser("mnemonic", help="Create a 12 word mnemonic")
 
     parser_seed = subparsers.add_parser("seed", help="Convert a seed to an address")
     parser_seed.add_argument("seed", metavar="SEED", type=str, help="The seed")
@@ -602,6 +609,8 @@ if __name__ == "__main__":
         sign_run(args)
     elif args.command == "broadcast_file":
         broadcast_run(args)
+    elif args.command == "mnemonic":
+        mnemonic_run(args)
     elif args.command == "seed":
         seed_run(args)
     elif args.command == "fees":
