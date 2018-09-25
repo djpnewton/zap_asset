@@ -305,12 +305,27 @@ def get_seed_addr_pubkey(args):
 
     return seed, address, pubkey, privkey
 
+def get_fee(default_fee, address, user_provided_fee):
+    fee = default_fee
+    if user_provided_fee:
+        fee = user_provided_fee
+    else:
+        try:
+            data = get(HOST, f"/addresses/scriptInfo/{address}")
+            if "error" in data:
+                print(f"Warning: unable to check script fees on address ({address})")
+                print(data)
+            else:
+                fee += data["extraFee"]
+        except:
+            print(f"WARNING: unable to check script fees on address ({address})")
+
+    return fee
+
 def transfer_run(args, timestamp=0):
     seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
-    fee = DEFAULT_TX_FEE
-    if args.fee:
-        fee = args.fee
+    fee = get_fee(DEFAULT_TX_FEE, address, args.fee)
 
     data = transfer_asset_payload(address, pubkey, privkey, args.recipient, args.assetid, args.amount, fee=fee, timestamp=timestamp)
 
@@ -319,9 +334,7 @@ def transfer_run(args, timestamp=0):
 def issue_run(args, timestamp=0):
     seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
-    fee = DEFAULT_ASSET_FEE
-    if args.fee:
-        fee = args.fee
+    fee = get_fee(DEFAULT_ASSET_FEE, address, args.fee)
 
     data = issue_asset_payload(address, pubkey, privkey, "ZAP!", "", args.amount, decimals=2, reissuable=True, fee=fee, timestamp=timestamp)
 
@@ -330,9 +343,7 @@ def issue_run(args, timestamp=0):
 def reissue_run(args, timestamp=0):
     seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
-    fee = DEFAULT_ASSET_FEE
-    if args.fee:
-        fee = args.fee
+    fee = get_fee(DEFAULT_ASSET_FEE, address, args.fee)
 
     data = reissue_asset_payload(address, pubkey, privkey, args.assetid, args.amount, reissuable=True, fee=fee, timestamp=timestamp)
     return data
@@ -340,9 +351,7 @@ def reissue_run(args, timestamp=0):
 def sponsor_run(args, timestamp=0):
     seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
-    fee = DEFAULT_SPONSOR_FEE
-    if args.fee:
-        fee = args.fee
+    fee = get_fee(DEFAULT_SPONSOR_FEE, address, args.fee)
     
     data = sponsor_payload(address, pubkey, privkey, args.assetid, args.assetfee, fee=fee, timestamp=timestamp)
 
@@ -351,9 +360,7 @@ def sponsor_run(args, timestamp=0):
 def set_script_run(args, timestamp=0):
     seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
-    fee = DEFAULT_SCRIPT_FEE
-    if args.fee:
-        fee = args.fee
+    fee = get_fee(DEFAULT_SCRIPT_FEE, address, args.fee)
 
     # read script data
     with open(args.filename, "r") as f:
@@ -364,9 +371,7 @@ def set_script_run(args, timestamp=0):
 def set_script_remove_run(args, timestamp=0):
     seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
-    fee = DEFAULT_SCRIPT_FEE
-    if args.fee:
-        fee = args.fee
+    fee = get_fee(DEFAULT_SCRIPT_FEE, address, args.fee)
 
     return set_script_payload(address, pubkey, privkey, None, fee=fee, timestamp=timestamp)
 
@@ -461,7 +466,7 @@ def construct_parser():
     parser.add_argument("-T", "--template", action="store_true", help="No signing, just create a transaction template")
     parser.add_argument("-n", "--numsigners", type=int, default=1, help="The number of signers (default: 1)")
     parser.add_argument("-p", "--pubkey", type=str, help="The pubkey to use (required if a multisig transaction)")
-    parser.add_argument("-f", "--fee", type=int, default=0, help="The fee to use (if you want to override the default)")
+    parser.add_argument("-f", "--fee", type=int, help="The fee to use (if you want to override the default)")
     parser.add_argument("-t", "--timestamp", type=str, help="The timestamp to use (if you want to override the default - ie current time), use a javascript timestamp or '+<X>hours'")
     subparsers = parser.add_subparsers(dest="command")
 
