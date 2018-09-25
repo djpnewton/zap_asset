@@ -426,6 +426,10 @@ def seed_run(args):
     pubkey = base58.b58decode(pubkey)
     print("Pubkey Hex: " + pubkey.hex())
 
+def pubkey_run(args):
+    address = generate_address(args.pubkey, CHAIN_ID)
+    print("Address: " + address)
+
 def fees_run(args):
     data = get(HOST, f"/addresses/scriptInfo/{args.account}")
     if "error" in data:
@@ -478,7 +482,7 @@ def construct_parser():
     parser_script_remove = subparsers.add_parser("script_remove", help="Remove a script from a waves account")
     parser_script_remove.add_argument("account", metavar="ACCOUNT", type=str, help="The account to remove the `script from")
 
-    parser_sign_file = subparsers.add_parser("sign_file", help="Broadcast a signed transaction read from a file")
+    parser_sign_file = subparsers.add_parser("sign_file", help="Add a signature to a transaction file")
     parser_sign_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
     parser_sign_file.add_argument("signerindex", metavar="SIGNERINDEX", type=int, help="The index (0 based) of the signer")
 
@@ -489,6 +493,9 @@ def construct_parser():
 
     parser_seed = subparsers.add_parser("seed", help="Convert a seed to an address")
     parser_seed.add_argument("seed", metavar="SEED", type=str, help="The seed")
+
+    parser_pubkey = subparsers.add_parser("pubkey", help="Convert a pubkey to an address")
+    parser_pubkey.add_argument("pubkey", metavar="PUBKEY", type=str, help="The pubkey")
 
     parser_fees = subparsers.add_parser("fees", help="Get the fees of a transactions for an account")
     parser_fees.add_argument("account", metavar="ACCOUNT", type=str, help="The account to request fees for")
@@ -613,6 +620,8 @@ if __name__ == "__main__":
         mnemonic_run(args)
     elif args.command == "seed":
         seed_run(args)
+    elif args.command == "pubkey":
+        pubkey_run(args)
     elif args.command == "fees":
         fees_run(args)
     else:
