@@ -10,6 +10,7 @@ import struct
 import os
 import random
 import hashlib
+import re
 
 import requests
 import base58
@@ -442,7 +443,7 @@ def construct_parser():
     parser.add_argument("-n", "--numsigners", type=int, default=1, help="The number of signers (default: 1)")
     parser.add_argument("-p", "--pubkey", type=str, help="The pubkey to use (required if a multisig transaction)")
     parser.add_argument("-f", "--fee", type=int, default=0, help="The fee to use (if you want to override the default)")
-    parser.add_argument("-t", "--timestamp", type=int, help="The timestamp to use (if you want to override the default - ie current time)")
+    parser.add_argument("-t", "--timestamp", type=str, help="The timestamp to use (if you want to override the default - ie current time), use a javascript timestamp or '+<X>hours'")
     subparsers = parser.add_subparsers(dest="command")
 
     parser_transfer = subparsers.add_parser("transfer", help="Transfer an asset")
@@ -491,7 +492,18 @@ def run_function(function):
     # set timestamp
     timestamp = waves_timestamp()
     if args.timestamp:
-        timestamp = args.timestamp
+        pattern = r"\+(\d+)hours"
+        m = re.search(pattern, args.timestamp)
+        if m:
+            hours = int(m.group(1))
+            timestamp += hours * 60 * 60 * 1000
+        else:
+            try:
+                timestamp = int(args.timestamp)
+            except:
+                print("ERROR: timestamp not a valid number")
+                sys.exit(3)
+
     # run selected function
     if args.numsigners < 1:
         print("ERROR: numsigners must be an greater then or equal to 1")
