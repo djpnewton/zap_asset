@@ -382,33 +382,37 @@ def sign_run(args):
     type = tx["type"]
     if type == 4:
         print(":: transfer tx")
-        tmp = transfer_asset_payload(None, pubkey, privkey, tx["recipient"], tx["assetId"], tx["amount"], \
-            tx["attachment"], tx["feeAssetId"], tx["fee"], tx["timestamp"])
+        tmp = transfer_asset_payload(None, tx["senderPublicKey"], privkey, tx["recipient"], tx["assetId"], \
+            tx["amount"], tx["attachment"], tx["feeAssetId"], tx["fee"], tx["timestamp"])
     elif type == 3:
         print(":: issue tx")
-        tmp = issue_asset_payload(None, pubkey, privkey, tx["name"], tx["description"], tx["quantity"], \
-            None, tx["decimals"], tx["reissuable"], tx["fee"], tx["timestamp"])
+        tmp = issue_asset_payload(None, tx["senderPublicKey"], privkey, tx["name"], tx["description"], \
+            tx["quantity"], None, tx["decimals"], tx["reissuable"], tx["fee"], tx["timestamp"])
     elif type == 5:
         print(":: reissue tx")
-        tmp = reissue_asset_payload(None, pubkey, privkey, tx["assetId"], tx["quantity"], tx["reissuable"], \
-            tx["fee"], tx["timestamp"])
+        tmp = reissue_asset_payload(None, tx["senderPublicKey"], privkey, tx["assetId"], tx["quantity"], \
+            tx["reissuable"], tx["fee"], tx["timestamp"])
     elif type == 14:
         print(":: sponsor tx")
-        tmp = sponsor_payload(None, pubkey, privkey, tx["assetId"], tx["minSponsoredAssetFee"], tx["fee"], \
-            tx["timestamp"])
+        tmp = sponsor_payload(None, tx["senderPublicKey"], privkey, tx["assetId"], \
+            tx["minSponsoredAssetFee"], tx["fee"], tx["timestamp"])
     elif type == 13:
         print(":: set script tx")
-        tmp = set_script_payload(None, pubkey, privkey, tx["script"], tx["fee"], tx["timestamp"])
+        tmp = set_script_payload(None, tx["senderPublicKey"], privkey, tx["script"], tx["fee"], \
+            tx["timestamp"])
     signature = json.loads(tmp)["proofs"][0]
+
+    # sign result
+    print(":: sign result")
+    print(tmp)
 
     # insert sig
     tx["proofs"][args.signerindex] = signature
-    print(tx)
     data = json_dumps(tx)
 
     # write
     filename = args.filename + "_signed%02d" % args.signerindex
-    print(f"::save (to '{filename}'")
+    print(f":: save (to '{filename}'")
     with open(filename, "w") as f:
         f.write(data)
     print(data)
