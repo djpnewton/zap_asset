@@ -286,15 +286,21 @@ def get_seed_addr_pubkey(args):
 
         # create address
         address, pubkey, privkey = generate_account(seed, CHAIN_ID)
-        print("Address: " + address)
 
-        # override pubkey
+        # override pubkey (and hence address)
         if args.pubkey:
             pubkey = args.pubkey
+            address = generate_address(pubkey, CHAIN_ID)
+
+        print("Address: " + address)
 
     # check address from pubkey matches args.account
     if hasattr(args, "account") and address != args.account:
         print("ERROR: Account does not match seed/pubkey!")
+        print(f"      Account: {args.account}")
+        print("---")
+        print(f"      Pubkey:  {pubkey}")
+        print(f"      Address: {address}")
         sys.exit(10)
 
     return seed, address, pubkey, privkey
@@ -562,15 +568,15 @@ def run_function(function):
                     sys.exit(4)
                 txs.append(tx)
         print(":: txs")
-        print(txs)
+        print(json_dumps(txs))
         print(":: sigs")
-        print(sigs)
+        print(json_dumps(sigs))
 
         # put the sigs in the final tx
         tx = txs[0]
         tx["proofs"] = sigs
         print(":: final tx")
-        print(tx)
+        print(json_dumps(tx))
         data = json_dumps(tx)
 
     # save
