@@ -336,7 +336,7 @@ def issue_run(args, timestamp=0):
 
     fee = get_fee(DEFAULT_ASSET_FEE, address, args.fee)
 
-    data = issue_asset_payload(address, pubkey, privkey, "ZAP!", "", args.amount, decimals=2, reissuable=True, fee=fee, timestamp=timestamp)
+    data = issue_asset_payload(address, pubkey, privkey, "ZapToken", "http://zap.me", args.amount, decimals=2, reissuable=True, fee=fee, timestamp=timestamp)
 
     return data
 
