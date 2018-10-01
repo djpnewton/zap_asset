@@ -1,6 +1,10 @@
 *.swp
 *~
 .DS_Store
+__pycache__/
 
+zap_asset.spec
 zap_asset.sh
 venv/
+build/
+dist/
