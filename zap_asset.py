@@ -430,16 +430,19 @@ def broadcast_run(args):
     response = broadcast_tx(data)
     print(response)
 
-def mnemonic_run(args):
-    m = mnemonic.Mnemonic("english")
-    print("Mnemonic: " + m.generate())
-
 def seed_run(args):
     address, pubkey, privkey = generate_account(args.seed, CHAIN_ID)
     print("Address: " + address)
     print("Pubkey: " + pubkey)
     pubkey = base58.b58decode(pubkey)
     print("Pubkey Hex: " + pubkey.hex())
+
+def mnemonic_run(args):
+    m = mnemonic.Mnemonic("english")
+    seed = m.generate()
+    print("Mnemonic: " + seed)
+    args.seed = seed
+    seed_run(args)
 
 def pubkey_run(args):
     address = generate_address(args.pubkey, CHAIN_ID)
