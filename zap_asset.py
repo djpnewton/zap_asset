@@ -284,6 +284,17 @@ def get_seed_addr_pubkey(args):
         # get seed from user
         seed = getpass.getpass("Seed: ")
 
+        # check seed is valid bip39 mnemonic
+        m = mnemonic.Mnemonic("english")
+        if m.check(seed.strip()):
+            seed = seed.strip()
+            seed = m.normalize_string(seed).split(" ")
+            seed = " ".join(seed)
+        else:
+            a = input("Seed is not a valid bip39 mnemonic are you sure you wish to continue (y/N): ")
+            if a not in ("y", "Y"):
+                sys.exit(12)
+
         # create address
         address, pubkey, privkey = generate_account(seed, CHAIN_ID)
 
