@@ -63,7 +63,8 @@ def generate_address(pubkey, chain_id):
 
 def generate_account(seed, chain_id, nonce=0):
     # convert input to bytes
-    seed = str2bytes(seed)
+    if isinstance(seed, str):
+        seed = str2bytes(seed)
     nonce = nonce.to_bytes(length=4, byteorder='big')
     # generate stuff
     account_seed = waves_hash(nonce + seed)
@@ -284,16 +285,19 @@ def get_seed_addr_pubkey(args):
         # get seed from user
         seed = getpass.getpass("Seed: ")
 
-        # check seed is valid bip39 mnemonic
-        m = mnemonic.Mnemonic("english")
-        if m.check(seed.strip()):
-            seed = seed.strip()
-            seed = m.normalize_string(seed).split(" ")
-            seed = " ".join(seed)
+        if args.decodebase58:
+            seed = base58.b58decode(seed)
         else:
-            a = input("Seed is not a valid bip39 mnemonic are you sure you wish to continue (y/N): ")
-            if a not in ("y", "Y"):
-                sys.exit(12)
+            # check seed is valid bip39 mnemonic
+            m = mnemonic.Mnemonic("english")
+            if m.check(seed.strip()):
+                seed = seed.strip()
+                seed = m.normalize_string(seed).split(" ")
+                seed = " ".join(seed)
+            else:
+                a = input("Seed is not a valid bip39 mnemonic are you sure you wish to continue (y/N): ")
+                if a not in ("y", "Y"):
+                    sys.exit(12)
 
         # create address
         address, pubkey, privkey = generate_account(seed, CHAIN_ID)
@@ -442,7 +446,10 @@ def broadcast_run(args):
     print(response)
 
 def seed_run(args):
-    address, pubkey, privkey = generate_account(args.seed, CHAIN_ID)
+    seed = args.seed
+    if args.decodebase58:
+        seed = base58.b58decode(seed)
+    address, pubkey, privkey = generate_account(seed, CHAIN_ID)
     print("Address: " + address)
     print("Pubkey: " + pubkey)
     pubkey = base58.b58decode(pubkey)
@@ -482,6 +489,7 @@ def construct_parser():
     parser.add_argument("-p", "--pubkey", type=str, help="The pubkey to use (required if a multisig transaction)")
     parser.add_argument("-f", "--fee", type=int, help="The fee to use (if you want to override the default)")
     parser.add_argument("-t", "--timestamp", type=str, help="The timestamp to use (if you want to override the default - ie current time), use a javascript timestamp or '+<X>hours'")
+    parser.add_argument("-d", "--decodebase58", action="store_true", help="Decode seeds as base58")
     subparsers = parser.add_subparsers(dest="command")
 
     parser_transfer = subparsers.add_parser("transfer", help="Transfer an asset")
