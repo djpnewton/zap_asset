@@ -1,12 +1,24 @@
-#define public keys
-let alicePubKey  = base58'47GC6U9ekib4M1nHYc51yL6CWHKWqAxbURwbwb7zEWrb' # '<SEED>' + '1'
-let bobPubKey    = base58'xBwXDTbiD3i8AVAVqWH1rYF1pfgXKsnjx1bV1drgZJs'  # '<SEED>' + '2'
-let cooperPubKey = base58'Cz8oy7CnDJb3HLyhgGaRrfnAWUgzG6W4m5BbRGwpRU3E' # '<SEED>' + '3'
+# Define the public keys corresponding to the four private keys which
+# will control the account.
+let blackPubkey = base58''
+let redPubkey = base58'nAB1nXdJb2L3CBupmPywXgsTy4AxwGriiPBjnQduvRt'
+let greenPubkey = base58'HkLKJaSuCVZLrkEiKMoR3GYYPWg7D9vTZbsdZPZYfZUb'
+let bluePubkey = base58'87xM2BfqBMtMp5PgDH5zfzvCCJWEH2zGMUUdbTVALwkg'
 
-#check whoever provided the valid proof
-let aliceSigned  = if(sigVerify(tx.bodyBytes, tx.proofs[0], alicePubKey  )) then 1 else 0
-let bobSigned    = if(sigVerify(tx.bodyBytes, tx.proofs[1], bobPubKey    )) then 1 else 0
-let cooperSigned = if(sigVerify(tx.bodyBytes, tx.proofs[2], cooperPubKey )) then 1 else 0
+# Check which of the four private keys have signed the transaction.
+let blackSigned = sigVerify(tx.bodyBytes, tx.proofs[0], blackPubkey)
+let redSigned = sigVerify(tx.bodyBytes, tx.proofs[1], redPubkey)
+let greenSigned = sigVerify(tx.bodyBytes, tx.proofs[2], greenPubkey)
+let blueSigned = sigVerify(tx.bodyBytes, tx.proofs[3], bluePubkey)
 
-#sum up every valid proof to get at least 2
-aliceSigned + bobSigned + cooperSigned >= 2
+# Compute the transaction's "signature score".
+let blackScore = if(blackSigned) then 2 else 0
+let redScore = if(redSigned) then 1 else 0
+let greenScore = if(greenSigned) then 1 else 0
+let blueScore = if(blueSigned) then 1 else 0
+let sigScore = blackScore + redScore + greenScore + blueScore
+
+# Authorise the transaction if and only if its signature score is at
+# least 3.  This corresponds to the transaction being signed by any
+# three keys, or being signed by the black key and any other key.
+sigScore >= 3
