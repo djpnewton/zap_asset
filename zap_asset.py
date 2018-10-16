@@ -403,55 +403,62 @@ def set_script_remove_run(args, timestamp=0):
     return set_script_payload(address, pubkey, privkey, None, fee=fee, timestamp=timestamp)
 
 def sign_run(args):
-    # read tx data (do this first so we dont waste time inputing a seed and then find out the file is not there)
-    if not os.path.exists(args.filename):
-        print(f"ERROR: file '{args.filename}' does not exist!")
-        sys.exit(ERR_EXIT_FILE_NO_EXIST)
-    with open(args.filename, "r") as f:
-        data = f.read()
+    # check that files exist (and are readable)
+    for filename in args.filename:
+        if not os.path.exists(filename):
+            print(f"ERROR: file '{filename}' does not exist!")
+            sys.exit(ERR_EXIT_FILE_NO_EXIST)
+        with open(filename, "r") as f:
+            data = f.read()
 
     # get seed and account info
     seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
-    # create sig
-    tx = json.loads(data)
-    type = tx["type"]
-    if type == 4:
-        print(":: transfer tx")
-        tmp = transfer_asset_payload(None, tx["senderPublicKey"], privkey, tx["recipient"], tx["assetId"], \
-            tx["amount"], tx["attachment"], tx["feeAssetId"], tx["fee"], tx["timestamp"])
-    elif type == 3:
-        print(":: issue tx")
-        tmp = issue_asset_payload(None, tx["senderPublicKey"], privkey, tx["name"], tx["description"], \
-            tx["quantity"], None, tx["decimals"], tx["reissuable"], tx["fee"], tx["timestamp"])
-    elif type == 5:
-        print(":: reissue tx")
-        tmp = reissue_asset_payload(None, tx["senderPublicKey"], privkey, tx["assetId"], tx["quantity"], \
-            tx["reissuable"], tx["fee"], tx["timestamp"])
-    elif type == 14:
-        print(":: sponsor tx")
-        tmp = sponsor_payload(None, tx["senderPublicKey"], privkey, tx["assetId"], \
-            tx["minSponsoredAssetFee"], tx["fee"], tx["timestamp"])
-    elif type == 13:
-        print(":: set script tx")
-        tmp = set_script_payload(None, tx["senderPublicKey"], privkey, tx["script"], tx["fee"], \
-            tx["timestamp"])
-    signature = json.loads(tmp)["proofs"][0]
+    # process each file
+    for filename in args.filename:
+        # read tx data 
+        with open(filename, "r") as f:
+            data = f.read()
 
-    # sign result
-    print(":: sign result")
-    print(tmp)
+        # create sig
+        tx = json.loads(data)
+        type = tx["type"]
+        if type == 4:
+            print(":: transfer tx")
+            tmp = transfer_asset_payload(None, tx["senderPublicKey"], privkey, tx["recipient"], tx["assetId"], \
+                tx["amount"], tx["attachment"], tx["feeAssetId"], tx["fee"], tx["timestamp"])
+        elif type == 3:
+            print(":: issue tx")
+            tmp = issue_asset_payload(None, tx["senderPublicKey"], privkey, tx["name"], tx["description"], \
+                tx["quantity"], None, tx["decimals"], tx["reissuable"], tx["fee"], tx["timestamp"])
+        elif type == 5:
+            print(":: reissue tx")
+            tmp = reissue_asset_payload(None, tx["senderPublicKey"], privkey, tx["assetId"], tx["quantity"], \
+                tx["reissuable"], tx["fee"], tx["timestamp"])
+        elif type == 14:
+            print(":: sponsor tx")
+            tmp = sponsor_payload(None, tx["senderPublicKey"], privkey, tx["assetId"], \
+                tx["minSponsoredAssetFee"], tx["fee"], tx["timestamp"])
+        elif type == 13:
+            print(":: set script tx")
+            tmp = set_script_payload(None, tx["senderPublicKey"], privkey, tx["script"], tx["fee"], \
+                tx["timestamp"])
+        signature = json.loads(tmp)["proofs"][0]
 
-    # insert sig
-    tx["proofs"][args.signerindex] = signature
-    data = json_dumps(tx)
+        # sign result
+        print(":: sign result")
+        print(tmp)
 
-    # write
-    filename = args.filename + "_signed%02d" % args.signerindex
-    print(f":: save (to '{filename}'")
-    with open(filename, "w") as f:
-        f.write(data)
-    print(data)
+        # insert sig
+        tx["proofs"][args.signerindex] = signature
+        data = json_dumps(tx)
+
+        # write
+        filename = filename + "_signed%02d" % args.signerindex
+        print(f":: save (to '{filename}'")
+        with open(filename, "w") as f:
+            f.write(data)
+        print(data)
 
 def broadcast_run(args):
     if not os.path.exists(args.filename):
@@ -541,8 +548,8 @@ def construct_parser():
     parser_script_remove.add_argument("account", metavar="ACCOUNT", type=str, help="The account to remove the `script from")
 
     parser_sign_file = subparsers.add_parser("sign_file", help="Add a signature to a transaction file")
-    parser_sign_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
     parser_sign_file.add_argument("signerindex", metavar="SIGNERINDEX", type=int, help="The index (0 based) of the signer")
+    parser_sign_file.add_argument("filename", metavar="FILENAME", nargs="+", help="The signed transaction filename/s")
 
     parser_broadcast_file = subparsers.add_parser("broadcast_file", help="Broadcast a signed transaction read from a file")
     parser_broadcast_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
