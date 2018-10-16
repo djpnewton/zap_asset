@@ -29,6 +29,15 @@ DEFAULT_ASSET_FEE = 100000000
 DEFAULT_SPONSOR_FEE = 100000000
 DEFAULT_SCRIPT_FEE = 1000000
 
+ERR_EXIT_NO_FUNCTION = 1
+ERR_EXIT_NEED_PUBKEY = 10
+ERR_EXIT_INVALID_BIP39 = 11
+ERR_EXIT_ACCOUNT_NO_MATCH = 12
+ERR_EXIT_TIMESTAMP_INVALID = 13
+ERR_EXIT_NUMSIGNERS_INVALID = 14
+ERR_EXIT_SIGNER_INDEX_NO_MATCH = 15
+ERR_EXIT_TX_NO_PROOFS = 16
+
 def throw_error(msg):
     raise Exception(msg)
 
@@ -274,7 +283,7 @@ def get_seed_addr_pubkey(args):
         # check pubkey is provided
         if not args.pubkey:
             print("ERROR: if not signing a pubkey must be provided!")
-            sys.exit(11)
+            sys.exit(ERR_EXIT_NEED_PUBKEY)
 
         # create address
         seed = None
@@ -297,7 +306,7 @@ def get_seed_addr_pubkey(args):
             else:
                 a = input("Seed is not a valid bip39 mnemonic are you sure you wish to continue (y/N): ")
                 if a not in ("y", "Y"):
-                    sys.exit(12)
+                    sys.exit(ERR_EXIT_INVALID_BIP39)
 
         # create address
         address, pubkey, privkey = generate_account(seed, CHAIN_ID)
@@ -316,7 +325,7 @@ def get_seed_addr_pubkey(args):
         print("---")
         print(f"      Pubkey:  {pubkey}")
         print(f"      Address: {address}")
-        sys.exit(10)
+        sys.exit(ERR_EXIT_ACCOUNT_NO_MATCH)
 
     return seed, address, pubkey, privkey
 
@@ -553,12 +562,12 @@ def run_function(function):
                 timestamp = int(args.timestamp)
             except:
                 print("ERROR: timestamp not a valid number")
-                sys.exit(3)
+                sys.exit(ERR_EXIT_TIMESTAMP_INVALID)
 
     # run selected function
     if args.numsigners < 1:
         print("ERROR: numsigners must be an greater then or equal to 1")
-        sys.exit(2)
+        sys.exit(ERR_EXIT_NUMSIGNERS_INVALID)
     if args.template:
         # run without signing
         print(":: template tx (no signing)")
@@ -589,14 +598,14 @@ def run_function(function):
                 i = int(i)
                 if i != signerindex:
                     print("ERROR: user input does not match signer index!")
-                    sys.exit(3)
+                    sys.exit(ERR_EXIT_SIGNER_INDEX_NO_MATCH)
                 data = function(args, timestamp=timestamp)
                 tx = json.loads(data)
                 if "proofs" in tx:
                     sigs.append(tx["proofs"][0])
                 else:
                     print("ERROR: tx has no 'proofs' field!")
-                    sys.exit(4)
+                    sys.exit(ERR_EXIT_TX_NO_PROOFS)
                 txs.append(tx)
         print(":: txs")
         print(json_dumps(txs))
@@ -663,7 +672,7 @@ if __name__ == "__main__":
         fees_run(args)
     else:
         parser.print_help()
-        sys.exit(1)
+        sys.exit(ERR_EXIT_NO_FUNCTION)
 
     if function:
         run_function(function)
