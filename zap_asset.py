@@ -19,6 +19,8 @@ import sha3
 import pyblake2
 import mnemonic
 
+VERSION = 3
+
 CHAIN_ID = 'T'
 DEFAULT_TESTNET_HOST = "https://testnode1.wavesnodes.com"
 DEFAULT_MAINNET_HOST = "https://nodes.wavesnodes.com"
@@ -489,6 +491,8 @@ def fees_run(args):
 def construct_parser():
     # construct argument parser
     parser = argparse.ArgumentParser()
+    
+    parser.add_argument("--version", action="version", version=f"zap_asset {VERSION}")
     parser.add_argument("--host", type=str, help=f"Set node host (default: testnet - '{DEFAULT_TESTNET_HOST}, mainnet - '{DEFAULT_MAINNET_HOST})")
     parser.add_argument("-m", "--mainnet", action="store_true", help="Set to use mainnet (default: false)")
     parser.add_argument("-b", "--broadcast", action="store_true", help="If set broadcast the result (default: false)")
