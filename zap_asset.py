@@ -39,6 +39,7 @@ ERR_EXIT_TIMESTAMP_INVALID = 13
 ERR_EXIT_NUMSIGNERS_INVALID = 14
 ERR_EXIT_SIGNER_INDEX_NO_MATCH = 15
 ERR_EXIT_TX_NO_PROOFS = 16
+ERR_EXIT_FILE_NO_EXIST = 17
 
 def throw_error(msg):
     raise Exception(msg)
@@ -402,11 +403,15 @@ def set_script_remove_run(args, timestamp=0):
     return set_script_payload(address, pubkey, privkey, None, fee=fee, timestamp=timestamp)
 
 def sign_run(args):
-    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
-
-    # read tx data
+    # read tx data (do this first so we dont waste time inputing a seed and then find out the file is not there)
+    if not os.path.exists(args.filename):
+        print(f"ERROR: file '{args.filename}' does not exist!")
+        sys.exit(ERR_EXIT_FILE_NO_EXIST)
     with open(args.filename, "r") as f:
         data = f.read()
+
+    # get seed and account info
+    seed, address, pubkey, privkey = get_seed_addr_pubkey(args)
 
     # create sig
     tx = json.loads(data)
@@ -449,6 +454,9 @@ def sign_run(args):
     print(data)
 
 def broadcast_run(args):
+    if not os.path.exists(args.filename):
+        print(f"ERROR: file '{args.filename}' does not exist!")
+        sys.exit(ERR_EXIT_FILE_NO_EXIST)
     # read tx data
     with open(args.filename, "r") as f:
         data = f.read()
