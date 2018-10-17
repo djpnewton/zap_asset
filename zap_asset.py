@@ -19,7 +19,7 @@ import sha3
 import pyblake2
 import mnemonic
 
-VERSION = 3
+VERSION = 4
 
 CHAIN_ID = 'T'
 DEFAULT_TESTNET_HOST = "https://testnode1.wavesnodes.com"
@@ -40,6 +40,10 @@ ERR_EXIT_NUMSIGNERS_INVALID = 14
 ERR_EXIT_SIGNER_INDEX_NO_MATCH = 15
 ERR_EXIT_TX_NO_PROOFS = 16
 ERR_EXIT_FILE_NO_EXIST = 17
+ERR_EXIT_NOT_ENOUGHT_PROOFS = 18
+ERR_EXIT_PROOF_EXISTS = 19
+
+TODO = "todo"
 
 def throw_error(msg):
     raise Exception(msg)
@@ -94,6 +98,17 @@ def waves_timestamp():
 
 def json_dumps(obj):
     return json.dumps(obj, indent=4)
+
+def common_start(sa, sb):
+    """ returns the longest common substring from the beginning of sa and sb """
+    def _iter():
+        for a, b in zip(sa, sb):
+            if a == b:
+                yield a
+            else:
+                return
+
+    return ''.join(_iter())
 
 def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
     if amount <= 0:
@@ -471,6 +486,49 @@ def broadcast_run(args):
     response = broadcast_tx(data)
     print(response)
 
+def merge_run(args):
+    base_tx = None
+    base_filename = None
+    for filename in args.filename:
+        if not os.path.exists(filename):
+            print(f"ERROR: file '{filename}' does not exist!")
+            sys.exit(ERR_EXIT_FILE_NO_EXIST)
+        # read tx data 
+        with open(filename, "r") as f:
+            data = f.read()
+
+        if not base_tx:
+            base_tx = json.loads(data)
+            base_filename = filename
+        else:
+            # add proof to base tx
+            tx = json.loads(data)
+            for i in range(len(tx["proofs"])):
+                proof = tx["proofs"][i]
+                if proof and proof != TODO:
+                    if len(base_tx["proofs"]) < i:
+                        print("ERROR: not enough proofs")
+                        sys.exit(ERR_EXIT_NOT_ENOUGHT_PROOFS)
+                    bd_proof = base_tx["proofs"][i]
+                    if bd_proof and bd_proof != TODO:
+                        print("ERROR: proof already exists")
+                        sys.exit(ERR_EXIT_PROOF_EXISTS)
+                    base_tx["proofs"][i] = proof
+            # update filename
+            base_filename = common_start(base_filename, filename)
+
+    # save base_tx
+    if not base_filename:
+        base_filename = "merged"
+    else:
+        base_filename += "_merged"
+    base_filename += ".json"
+    with open(base_filename, "w") as f:
+        data = json_dumps(base_tx)
+        print(f":: write merged file ({base_filename})")
+        print(data)
+        f.write(data)
+
 def seed_run(args):
     seed = args.seed
     if args.decodebase58:
@@ -554,6 +612,9 @@ def construct_parser():
     parser_broadcast_file = subparsers.add_parser("broadcast_file", help="Broadcast a signed transaction read from a file")
     parser_broadcast_file.add_argument("filename", metavar="FILENAME", type=str, help="The signed transaction filename")
 
+    parser_merge_file = subparsers.add_parser("merge_file", help="Merge the proofs of a list of transactions")
+    parser_merge_file.add_argument("filename", metavar="FILENAME", nargs="+", help="The partially signed transaction filename")
+
     parser_mnemonic = subparsers.add_parser("mnemonic", help="Create a 12 word mnemonic")
 
     parser_seed = subparsers.add_parser("seed", help="Convert a seed to an address")
@@ -594,7 +655,7 @@ def run_function(function):
 
         # fill dummy proofs
         tx = json.loads(data)
-        tx["proofs"] = args.numsigners * ["todo"]
+        tx["proofs"] = args.numsigners * [TODO]
         data = json_dumps(tx)
 
         print(data)
@@ -681,6 +742,8 @@ if __name__ == "__main__":
         sign_run(args)
     elif args.command == "broadcast_file":
         broadcast_run(args)
+    elif args.command == "merge_file":
+        merge_run(args)
     elif args.command == "mnemonic":
         mnemonic_run(args)
     elif args.command == "seed":
