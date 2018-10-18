@@ -296,6 +296,10 @@ def get(host, api):
 def broadcast_tx(data):
     return post(HOST, "/transactions/broadcast", data)
 
+def check_seed(seed):
+    m = mnemonic.Mnemonic("english")
+    return m.check(seed)
+
 def get_seed_addr_pubkey(args):
     if args.template:
         # check pubkey is provided
@@ -316,8 +320,7 @@ def get_seed_addr_pubkey(args):
             seed = base58.b58decode(seed)
         else:
             # check seed is valid bip39 mnemonic
-            m = mnemonic.Mnemonic("english")
-            if m.check(seed.strip()):
+            if check_seed(seed.strip()):
                 seed = seed.strip()
                 seed = m.normalize_string(seed).split(" ")
                 seed = " ".join(seed)
@@ -533,6 +536,10 @@ def seed_run(args):
     seed = args.seed
     if args.decodebase58:
         seed = base58.b58decode(seed)
+    if not check_seed(seed):
+        a = input("Seed is not a valid bip39 mnemonic are you sure you wish to continue (y/N): ")
+        if a not in ("y", "Y"):
+            sys.exit(ERR_EXIT_INVALID_BIP39)
     address, pubkey, privkey = generate_account(seed, CHAIN_ID)
     print("Address: " + address)
     print("Pubkey: " + pubkey)
