@@ -1,8 +1,8 @@
 # Define the public keys corresponding to the four private keys which
 # will control the account.
-let blackPubkey = base58''
+let blackPubkey = base58'49Fv62fHbC3vXTHnY1ZYfCjJQZ99WNGhZEzr1udZ1fjV'
 let redPubkey = base58'nAB1nXdJb2L3CBupmPywXgsTy4AxwGriiPBjnQduvRt'
-let greenPubkey = base58'HkLKJaSuCVZLrkEiKMoR3GYYPWg7D9vTZbsdZPZYfZUb'
+let greenPubkey = base58'Hnsatq6jj4GDECC4fJAfUWNvi963pUTtmfF8YcD3NCia'
 let bluePubkey = base58'87xM2BfqBMtMp5PgDH5zfzvCCJWEH2zGMUUdbTVALwkg'
 
 # Check which of the four private keys have signed the transaction.
