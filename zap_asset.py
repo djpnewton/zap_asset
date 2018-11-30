@@ -322,7 +322,7 @@ def get_seed_addr_pubkey(args):
             # check seed is valid bip39 mnemonic
             if check_seed(seed.strip()):
                 seed = seed.strip()
-                seed = m.normalize_string(seed).split(" ")
+                seed = mnemonic.Mnemonic.normalize_string(seed).split(" ")
                 seed = " ".join(seed)
             else:
                 a = input("Seed is not a valid bip39 mnemonic are you sure you wish to continue (y/N): ")
