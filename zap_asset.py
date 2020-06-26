@@ -110,7 +110,7 @@ def common_start(sa, sb):
 
     return ''.join(_iter())
 
-def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
+def transfer_asset_non_witness_bytes(pubkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
     if amount <= 0:
         msg = 'Amount must be > 0'
         throw_error(msg)
@@ -128,28 +128,33 @@ def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount,
             base58.b58decode(recipient) + \
             struct.pack(">H", len(attachment)) + \
             str2bytes(attachment)
-        signature = ""
-        if privkey:
-            signature = sign(privkey, sdata)
-        data = json_dumps({
-            "type": 4,
-            "version": 2,
-            "senderPublicKey": pubkey,
-            "recipient": recipient,
-            "assetId": (assetid if assetid else ""),
-            "feeAssetId": (feeAsset if feeAsset else ""),
-            "amount": amount,
-            "fee": fee,
-            "timestamp": timestamp,
-            "attachment": base58.b58encode(str2bytes(attachment)),
-            "proofs": [
-                signature
-            ]
-        })
+        return sdata
 
-        return data
+def transfer_asset_payload(address, pubkey, privkey, recipient, assetid, amount, attachment='', feeAsset='', fee=DEFAULT_TX_FEE, timestamp=0):
+    sdata = transfer_asset_non_witness_bytes(pubkey, recipient, assetid, amount, attachment, feeAsset, fee, timestamp)
 
-def issue_asset_payload(address, pubkey, privkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=DEFAULT_ASSET_FEE, timestamp=0):
+    signature = ""
+    if privkey:
+        signature = sign(privkey, sdata)
+    data = json_dumps({
+        "type": 4,
+        "version": 2,
+        "senderPublicKey": pubkey,
+        "recipient": recipient,
+        "assetId": (assetid if assetid else ""),
+        "feeAssetId": (feeAsset if feeAsset else ""),
+        "amount": amount,
+        "fee": fee,
+        "timestamp": timestamp,
+        "attachment": base58.b58encode(str2bytes(attachment)),
+        "proofs": [
+            signature
+        ]
+    })
+
+    return data
+
+def issue_asset_non_witness_bytes(pubkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=DEFAULT_ASSET_FEE, timestamp=0):
     if len(name) < 4 or len(name) > 16:
         msg = 'Asset name must be between 4 and 16 characters long'
         throw_error(msg)
@@ -174,29 +179,34 @@ def issue_asset_payload(address, pubkey, privkey, name, description, quantity, s
             struct.pack(">Q", fee) + \
             struct.pack(">Q", timestamp) + \
             (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0')
+        return sdata
 
-        signature = ""
-        if privkey:
-            signature = sign(privkey, sdata)
-        data = json_dumps({
-            "type": 3,
-            "version": 2,
-            "senderPublicKey": pubkey,
-            "name": name,
-            "description": description,
-            "quantity": quantity,
-            "decimals": decimals,
-            "reissuable": reissuable,
-            "fee": fee,
-            "timestamp": timestamp,
-            "proofs": [
-                signature
-            ]
-        })
 
-        return data
+def issue_asset_payload(address, pubkey, privkey, name, description, quantity, script=None, decimals=2, reissuable=True, fee=DEFAULT_ASSET_FEE, timestamp=0):
+    sdata = issue_asset_non_witness_bytes(pubkey, name, description, quantity, script, decimals, reissuable, fee, timestamp)
 
-def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuable=False, fee=DEFAULT_TX_FEE, timestamp=0):
+    signature = ""
+    if privkey:
+        signature = sign(privkey, sdata)
+    data = json_dumps({
+        "type": 3,
+        "version": 2,
+        "senderPublicKey": pubkey,
+        "name": name,
+        "description": description,
+        "quantity": quantity,
+        "decimals": decimals,
+        "reissuable": reissuable,
+        "fee": fee,
+        "timestamp": timestamp,
+        "proofs": [
+            signature
+        ]
+    })
+
+    return data
+
+def reissue_asset_non_witness_bytes(pubkey, assetid, quantity, reissuable=False, fee=DEFAULT_TX_FEE, timestamp=0):
     if timestamp == 0:
         timestamp = waves_timestamp()
     sdata = b'\5' + \
@@ -208,6 +218,11 @@ def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuabl
         (b'\1' if reissuable else b'\0') + \
         struct.pack(">Q",fee) + \
         struct.pack(">Q", timestamp)
+    return sdata
+
+def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuable=False, fee=DEFAULT_TX_FEE, timestamp=0):
+    sdata = reissue_asset_non_witness_bytes(pubkey, assetid, quantity, reissuable, fee, timestamp)
+
     signature = ""
     if privkey:
         signature = sign(privkey, sdata)
@@ -227,7 +242,7 @@ def reissue_asset_payload(address, pubkey, privkey, assetid, quantity, reissuabl
 
     return data
 
-def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=DEFAULT_SPONSOR_FEE, timestamp=0):
+def sponsor_non_witness_bytes(pubkey, assetId, minimalFeeInAssets, fee=DEFAULT_SPONSOR_FEE, timestamp=0):
     if timestamp == 0:
         timestamp = int(time.time() * 1000)
     sdata = b'\x0e' + \
@@ -237,6 +252,11 @@ def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=D
         struct.pack(">Q", minimalFeeInAssets) + \
         struct.pack(">Q", fee) + \
         struct.pack(">Q", timestamp)
+    return sdata
+
+def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=DEFAULT_SPONSOR_FEE, timestamp=0):
+    sdata = sponsor_non_witness_bytes(pubkey, assetId, minimalFeeInAssets, fee, timestamp)
+
     signature = ""
     if privkey:
         signature = sign(privkey, sdata)
@@ -256,12 +276,24 @@ def sponsor_payload(address, pubkey, privkey, assetId, minimalFeeInAssets, fee=D
 
     return data
 
-def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE, timestamp=0):
+def set_script_non_witness_bytes(pubkey, script, fee=DEFAULT_SCRIPT_FEE, timestamp=0):
     if script:
         rawScript = base64.b64decode(script)
         scriptLength = len(rawScript)
     if timestamp == 0:
         timestamp = waves_timestamp()
+    sdata = b'\x0d' + \
+        b'\1' + \
+        str2bytes(str(CHAIN_ID)) + \
+        base58.b58decode(pubkey) + \
+        (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0') + \
+        struct.pack(">Q", fee) + \
+        struct.pack(">Q", timestamp)
+    return sdata
+
+def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE, timestamp=0):
+    sdata = set_script_non_witness_bytes(pubkey, script, fee, timestamp)
+
     sdata = b'\x0d' + \
         b'\1' + \
         str2bytes(str(CHAIN_ID)) + \
