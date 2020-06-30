@@ -294,13 +294,6 @@ def set_script_non_witness_bytes(pubkey, script, fee=DEFAULT_SCRIPT_FEE, timesta
 def set_script_payload(address, pubkey, privkey, script, fee=DEFAULT_SCRIPT_FEE, timestamp=0):
     sdata = set_script_non_witness_bytes(pubkey, script, fee, timestamp)
 
-    sdata = b'\x0d' + \
-        b'\1' + \
-        str2bytes(str(CHAIN_ID)) + \
-        base58.b58decode(pubkey) + \
-        (b'\1' + struct.pack(">H", scriptLength) + rawScript if script else b'\0') + \
-        struct.pack(">Q", fee) + \
-        struct.pack(">Q", timestamp)
     signature = ""
     if privkey:
         signature = sign(privkey, sdata)
